@@ -63,6 +63,20 @@ function Title:OnClick(button)
 	end
 end
 
+local modifierActions = {
+	IsShiftKeyDown = .1,
+	IsControlKeyDown = 1,
+	IsAltKeyDown = 5,
+}
+
+local function GetNudgeStep()
+	for funcName, stepValue in pairs(modifierActions) do
+		if _G[funcName]() == true then
+			return stepValue
+		end
+	end
+end
+
 function Title:OnEnter()
 	GameTooltip:SetOwner(self:GetTipAnchor())
 	GameTooltip:SetText(self:GetText())
@@ -70,8 +84,58 @@ function Title:OnEnter()
 	GameTooltip:AddLine(L.TipShowSearch:format(L.DoubleClick), 1,1,1)
 	GameTooltip:AddLine(L.TipMove:format(L.Drag), 1,1,1)
 	GameTooltip:Show()
+	
+	
+	if IsModifierKeyDown() == true then
+		self:SetKeyboardNudgeEnable(true)
+	end	
 end
 
+local KEYBOARD_MOVEMENT_INCREMENT = 1
+
+function Title:SetKeyboardNudgeEnable(flag)
+	
+	self:SetScript('OnKeyDown', function(_, key)
+		KEYBOARD_MOVEMENT_INCREMENT = GetNudgeStep() or KEYBOARD_MOVEMENT_INCREMENT
+		self:OnKeyDown(key)
+	end)
+	
+	self:SetScript('OnKeyUp', function(_, key)
+		if IsModifierKeyDown() ~= true then 
+			self:SetScript('OnKeyDown', nil)
+			self:SetScript('OnKeyUp', nil)
+		end
+	end)
+end
+
+local nudge = {
+	MOVEFORWARD = {0, KEYBOARD_MOVEMENT_INCREMENT},
+	MOVEBACKWARD = {0, -KEYBOARD_MOVEMENT_INCREMENT},
+	TURNLEFT = {-KEYBOARD_MOVEMENT_INCREMENT, 0},
+	TURNRIGHT = {KEYBOARD_MOVEMENT_INCREMENT, 0},
+	
+}
+
+function Title:OnKeyDown(key)
+	local increment, bind = nudge[GetBindingAction(key)], GetBindingAction(key)
+	if increment and bind then
+		self:NudgeFrame(unpack(increment))
+		self:SetPropagateKeyboardInput(false) --must be called or will move character as well.
+	end
+end
+
+function Title:NudgeFrame(dx, dy)
+    local oX, oY, ow, oh = self:GetParent():GetRect()
+    local pw, ph = UIParent:GetSize()
+	local eS = self:GetParent():GetEffectiveScale()
+	pw, ph = pw / eS, ph / eS
+    local x = Clamp((oX + dx), 0, pw - ow)
+    local y = Clamp((oY + dy), 0, ph - oh)
+
+	self:GetParent():ClearAllPoints()
+	self:GetParent():SetPoint("BOTTOMLEFT", self:GetParent():GetParent(), "BOTTOMLEFT", x, y)
+    self:GetParent():SavePosition("BOTTOMLEFT", "BOTTOMLEFT", x, y)
+end
 
 --[[ API ]]--
 
